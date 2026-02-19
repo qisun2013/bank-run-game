@@ -348,13 +348,13 @@ JOIN_PAGE = """
 """
 
 STUDENT_PAGE = """
-<!doctype html><html><head><meta charset="utf-8"><title>Play</title>{{css|safe}}</head><body>
-<h2>🏦 Bank Run Game</h2>
+<!doctype html><html><head><meta charset="utf-8"><title>学生端</title>{{css|safe}}</head><body>
+<h2>🏦 银行挤兑博弈（学生端）</h2>
 
 <div class="card">
   <div><b>你：</b>{{name}}</div>
-  <div><b>Round：</b>{{round_no}} / {{params.rounds_total}} &nbsp; <b>Phase：</b>{{phase}}</div>
-  <div><b>Players：</b>{{n_players}} &nbsp; <b>Bad news：</b>{{"ON" if params.bad_news else "OFF"}}
+  <div><b>轮次：</b>{{round_no}} / {{params.rounds_total}} &nbsp; <b>阶段：</b>{{phase}}</div>
+  <div><b>玩家数：</b>{{n_players}} &nbsp; <b>坏消息开关：</b>{{"ON" if params.bad_news else "OFF"}}
     &nbsp; <b>Insurance：</b>{{"ON" if params.deposit_insurance else "OFF"}}
     &nbsp; <b>LoLR：</b>{{"ON" if params.lender_of_last_resort else "OFF"}}
     &nbsp; <b>Queue：</b>{{"ON" if params.queue_mode else "OFF"}}
@@ -372,7 +372,7 @@ STUDENT_PAGE = """
   {% endif %}
   {% if params.show_withdraw_count and phase=="collect" %}
     <div style="margin-top:8px;">
-      <b>Public signal:</b> Current withdrawals = <b id="wcnt">...</b> / {{n_players}}
+      <b>公共信号：</b> 当前已取款人数 = <b id="wcnt">...</b> / {{n_players}}
     </div>
   {% endif %}
 </div>
@@ -380,21 +380,21 @@ STUDENT_PAGE = """
 <div class="card">
   <h3>本局参数（只读）</h3>
   <table>
-    <tr><th>Parameter</th><th>Value</th></tr>
-    <tr><td>deposits_per_student</td><td>{{"%.2f"|format(params.deposits_per_student)}}</td></tr>
-    <tr><td>liquid_reserve_ratio</td><td>{{"%.2f"|format(params.liquid_reserve_ratio)}}</td></tr>
-    <tr><td>long_asset_return</td><td>{{"%.2f"|format(params.long_asset_return)}}</td></tr>
-    <tr><td>fire_sale_price</td><td>{{"%.2f"|format(params.fire_sale_price)}}</td></tr>
-    <tr><td>bad_news</td><td>{{"ON" if params.bad_news else "OFF"}}</td></tr>
-    <tr><td>news_severity</td><td>{{"%.2f"|format(params.news_severity)}}</td></tr>
-    <tr><td>insurance_cap</td><td>{{"%.2f"|format(params.insurance_cap)}}</td></tr>
-    <tr><td>lolr_limit</td><td>{{"%.2f"|format(params.lolr_limit)}}</td></tr>
-    <tr><td>Perceived R</td><td>{{"%.2f"|format(params.perceived_R())}}</td></tr>
-    <tr><td>Queue mode</td><td>{{"ON" if params.queue_mode else "OFF"}}</td></tr>
-    <tr><td>Show withdraw count</td><td>{{"ON" if params.show_withdraw_count else "OFF"}}</td></tr>
-    <tr><td>Panic sensitivity</td><td>{{"%.2f"|format(params.panic_sensitivity)}}</td></tr>
-    <tr><td>Private signal precision</td><td>{{"%.2f"|format(params.private_signal_precision)}}</td></tr>
-    <tr><td>Fundamental bad-news prob</td><td>{{"%.2f"|format(params.bad_news_prob)}}</td></tr>
+    <tr><th>参数</th><th>值</th></tr>
+    <tr><td>每人存款（deposits_per_student）</td><td>{{"%.2f"|format(params.deposits_per_student)}}</td></tr>
+    <tr><td>准备金比例（liquid_reserve_ratio）</td><td>{{"%.2f"|format(params.liquid_reserve_ratio)}}</td></tr>
+    <tr><td>长期资产回报（long_asset_return）</td><td>{{"%.2f"|format(params.long_asset_return)}}</td></tr>
+    <tr><td>火售价格（fire_sale_price）</td><td>{{"%.2f"|format(params.fire_sale_price)}}</td></tr>
+    <tr><td>坏消息开关（bad_news）</td><td>{{"开" if params.bad_news else "关"}}</td></tr>
+    <tr><td>坏消息强度（news_severity）</td><td>{{"%.2f"|format(params.news_severity)}}</td></tr>
+    <tr><td>保险上限（insurance_cap）</td><td>{{"%.2f"|format(params.insurance_cap)}}</td></tr>
+    <tr><td>最后贷款人注资上限（lolr_limit）</td><td>{{"%.2f"|format(params.lolr_limit)}}</td></tr>
+    <tr><td>感知回报 R（Perceived R）</td><td>{{"%.2f"|format(params.perceived_R())}}</td></tr>
+    <tr><td>排队模式（queue_mode）</td><td>{{"开" if params.queue_mode else "关"}}</td></tr>
+    <tr><td>显示实时取款人数（show_withdraw_count）</td><td>{{"开" if params.show_withdraw_count else "关"}}</td></tr>
+    <tr><td>恐慌敏感度（panic_sensitivity）</td><td>{{"%.2f"|format(params.panic_sensitivity)}}</td></tr>
+    <tr><td>私人信号准确率（private_signal_precision）</td><td>{{"%.2f"|format(params.private_signal_precision)}}</td></tr>
+    <tr><td>基本面坏消息概率（bad_news_prob）</td><td>{{"%.2f"|format(params.bad_news_prob)}}</td></tr>
   </table>
 </div>
 
@@ -453,9 +453,9 @@ STUDENT_PAGE = """
       <p><small>{{last.note}}</small></p>
 
       {% if last.withdraw_queue and last.withdraw_queue|length > 0 %}
-        <h4>Withdraw queue (早取更安全)</h4>
+        <h4>取款队列（早取更安全）</h4>
         <table>
-          <tr><th>Order</th><th>Name</th><th>Payout</th></tr>
+          <tr><th>顺位</th><th>姓名</th><th>收益</th></tr>
           {% for item in last.withdraw_queue %}
             <tr><td>{{loop.index}}</td><td>{{item.name}}</td><td>{{"%.2f"|format(item.payout)}}</td></tr>
           {% endfor %}
@@ -486,32 +486,32 @@ STUDENT_PAGE = """
 """
 
 TEACHER_PAGE = """
-<!doctype html><html><head><meta charset="utf-8"><title>Teacher</title>{{css|safe}}</head><body>
-<h2>🎓 Teacher Console (Bank)</h2>
+<!doctype html><html><head><meta charset="utf-8"><title>教师端</title>{{css|safe}}</head><body>
+<h2>🎓 教师控制台（Bank Run）</h2>
 
 <div class="card">
-  <p><b>Student link:</b> <small class="mono">{{host}}/</small></p>
-  <p>Players: <b>{{n_players}}</b> | Phase: <b>{{phase}}</b> | Round: <b>{{round_no}}</b> / {{params.rounds_total}}</p>
-  <p>Params locked: <b>{{"YES" if params.locked else "NO"}}</b></p>
+  <p><b>学生入口链接：</b> <small class="mono">{{host}}/</small></p>
+  <p>玩家数：<b>{{n_players}}</b> | 阶段：<b>{{phase}}</b> | 轮次：<b>{{round_no}}</b> / {{params.rounds_total}}</p>
+  <p>参数锁定：<b>{{"是" if params.locked else "否"}}</b></p>
   <p>
-    <a class="btn primary" href="/teacher/action?key={{key}}&a=start">Start / Next Round</a>
-    <a class="btn" href="/teacher/action?key={{key}}&a=reveal">Force Reveal</a>
-    <a class="btn" href="/teacher/action?key={{key}}&a=lock">{{"Unlock Params" if params.locked else "Lock Params"}}</a>
-    <a class="btn danger" href="/teacher/action?key={{key}}&a=reset" onclick="return confirm('Reset?');">Reset</a>
+    <a class="btn primary" href="/teacher/action?key={{key}}&a=start">开始 / 下一轮</a>
+    <a class="btn" href="/teacher/action?key={{key}}&a=reveal">强制结算</a>
+    <a class="btn" href="/teacher/action?key={{key}}&a=lock">{{"解锁参数" if params.locked else "锁定参数"}}</a>
+    <a class="btn danger" href="/teacher/action?key={{key}}&a=reset" onclick="return confirm('重置?');">重置</a>
   </p>
   {% if phase=="collect" %}
-    <p>Time left: <b id="t"></b> sec | Public withdrawals now: <b id="tw">...</b></p>
+    <p>剩余时间：<b id="t"></b> 秒 | 当前公开取款人数：<b id="tw">...</b></p>
   {% endif %}
 </div>
 
 <div class="card">
-  <h3>Set parameters (teacher only)</h3>
+  <h3>参数设置（仅教师）</h3>
   {% if params.locked %}
-    <p><b>Locked.</b> 解锁后才能修改参数。</p>
+    <p><b>已锁定。</b> 解锁后才能修改参数。</p>
   {% endif %}
   <form method="post" action="/teacher/params?key={{key}}">
     <table>
-      <tr><th>Parameter</th><th>Value</th><th>Note</th></tr>
+      <tr><th>参数</th><th>值</th><th>说明</th></tr>
       <tr><td>deposits_per_student</td><td><input name="deposits_per_student" value="{{params.deposits_per_student}}" {% if params.locked %}disabled{% endif %}></td><td>每人存款</td></tr>
       <tr><td>liquid_reserve_ratio</td><td><input name="liquid_reserve_ratio" value="{{params.liquid_reserve_ratio}}" {% if params.locked %}disabled{% endif %}></td><td>现金准备金比例</td></tr>
       <tr><td>long_asset_return</td><td><input name="long_asset_return" value="{{params.long_asset_return}}" {% if params.locked %}disabled{% endif %}></td><td>长期资产到期回报</td></tr>
@@ -571,9 +571,9 @@ TEACHER_PAGE = """
 </div>
 
 <div class="card">
-  <h3>Players</h3>
+  <h3>玩家列表</h3>
   <table>
-    <tr><th>Name</th><th>Choice</th><th>Total payoff</th></tr>
+    <tr><th>姓名</th><th>本轮选择</th><th>累计收益</th></tr>
     {% for p in players %}
       <tr><td>{{p.name}}</td><td>{{p.last_choice}}</td><td>{{"%.2f"|format(p.total_payoff)}}</td></tr>
     {% endfor %}
@@ -581,24 +581,24 @@ TEACHER_PAGE = """
 </div>
 
 <div class="card">
-  <h3>Current Round Fundamentals (for debrief)</h3>
-  <p>Bad fundamental state: <b>{{"YES" if round_state.fundamental_bad else "NO"}}</b> |
-     Fundamental R: <b>{{"%.2f"|format(round_state.fundamental_R)}}</b></p>
+  <h3>本轮基本面（复盘用）</h3>
+  <p>基本面是否恶化：<b>{{"是" if round_state.fundamental_bad else "否"}}</b> |
+     基本面回报 R：<b>{{"%.2f"|format(round_state.fundamental_R)}}</b></p>
 </div>
 
 <div class="card">
-  <h3>History</h3>
+  <h3>历史记录</h3>
   <table>
-    <tr><th>Round</th><th>W</th><th>S</th><th>Default risk</th><th>AvgPayW</th><th>PayS</th><th>Fund.Bad</th><th>Fund.R</th><th>CashStart</th><th>CashEnd</th><th>LongLeft</th><th>Note</th></tr>
+    <tr><th>轮次</th><th>取款W</th><th>留存S</th><th>违约风险</th><th>取款平均收益</th><th>留存收益</th><th>基本面坏</th><th>基本面R</th><th>期初现金</th><th>期末现金</th><th>剩余长期资产</th><th>备注</th></tr>
     {% for h in history %}
       <tr>
         <td>{{h.round_no}}</td>
         <td>{{h.withdrawals}}</td>
         <td>{{h.stays}}</td>
-        <td>{{"YES" if h.bank_default else "NO"}}</td>
+        <td>{{"是" if h.bank_default else "否"}}</td>
         <td>{{"%.2f"|format(h.payout_withdraw_avg)}}</td>
         <td>{{"%.2f"|format(h.payout_stay)}}</td>
-        <td>{{"YES" if h.fundamental_bad else "NO"}}</td>
+        <td>{{"是" if h.fundamental_bad else "否"}}</td>
         <td>{{"%.2f"|format(h.fundamental_R)}}</td>
         <td>{{"%.2f"|format(h.cash_start)}}</td>
         <td>{{"%.2f"|format(h.cash_end)}}</td>
