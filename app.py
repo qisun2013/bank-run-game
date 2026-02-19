@@ -1,6 +1,7 @@
 from flask import Flask, request, redirect, url_for, render_template_string, abort, jsonify
 import time
 import secrets
+import random
 from dataclasses import dataclass
 
 app = Flask(__name__)
@@ -39,6 +40,9 @@ class Params:
     # New toggles
     queue_mode: bool = True        # First-come-first-served queue
     show_withdraw_count: bool = True  # public signal during collect
+    panic_sensitivity: float = 0.35   # higher withdrawal ratio lowers long-asset value
+    private_signal_precision: float = 0.75
+    bad_news_prob: float = 0.35
 
     def perceived_R(self) -> float:
         if not self.bad_news:
@@ -64,6 +68,11 @@ STATE = {
     "round_no": 0,
     "deadline": 0.0,
     "history": [],      # list[dict] round outcomes
+    "round_state": {
+        "fundamental_bad": False,
+        "fundamental_R": 1.0,
+        "private_signals": {},  # pid -> "BAD" | "GOOD"
+    },
 }
 
 
@@ -123,6 +132,23 @@ def start_round():
     STATE["round_no"] += 1
     STATE["phase"] = "collect"
     STATE["deadline"] = now() + P.round_seconds
+
+    # Fundamental + private noisy signals (global games flavor)
+    fundamental_bad = random.random() < max(0.0, min(1.0, P.bad_news_prob))
+    fundamental_R = P.long_asset_return * (1.0 - P.news_severity) if fundamental_bad else P.long_asset_return
+    precision = max(0.5, min(0.99, P.private_signal_precision))
+    private_signals = {}
+    for pid in STATE["players"]:
+        if random.random() < precision:
+            private_signals[pid] = "BAD" if fundamental_bad else "GOOD"
+        else:
+            private_signals[pid] = "GOOD" if fundamental_bad else "BAD"
+
+    STATE["round_state"] = {
+        "fundamental_bad": fundamental_bad,
+        "fundamental_R": max(0.0, fundamental_R),
+        "private_signals": private_signals,
+    }
     reset_choices()
     return True, f"Round {STATE['round_no']} started."
 
@@ -194,8 +220,11 @@ def reveal_round():
                 cash = 0.0
             payout_map[wp.pid] = apply_insurance(payout)
 
-        # Stayers: expected claim value on remaining assets (if any) using perceived R
-        R = P.perceived_R()
+        # Stayers: expected claim value on remaining assets (fundamentals + panic externality)
+        fundamental_R = STATE["round_state"].get("fundamental_R", P.perceived_R())
+        withdrawal_ratio = (W / N) if N > 0 else 0.0
+        panic_discount = max(0.0, 1.0 - P.panic_sensitivity * withdrawal_ratio)
+        R = max(0.0, fundamental_R * panic_discount)
         total_future_value = cash + long_assets * R
         per_stayer = (total_future_value / S) if S > 0 else 0.0
         per_stayer = apply_insurance(per_stayer)
@@ -205,7 +234,7 @@ def reveal_round():
         payout_W_avg = (sum(payout_map[p.pid] for p in W_players) / W) if W > 0 else 0.0
         payout_S_val = per_stayer
 
-        note = f"Queue mode. LoLR +{lolr_used:.2f}. Perceived R={R:.2f}."
+        note = f"Queue mode. LoLR +{lolr_used:.2f}. Fundamental R={fundamental_R:.2f}, effective R={R:.2f}."
         cash_end = cash
         long_remaining = long_assets
 
@@ -215,7 +244,10 @@ def reveal_round():
             payout_W = apply_insurance(P.deposits_per_student)
             cash -= total_demand
 
-            R = P.perceived_R()
+            fundamental_R = STATE["round_state"].get("fundamental_R", P.perceived_R())
+            withdrawal_ratio = (W / N) if N > 0 else 0.0
+            panic_discount = max(0.0, 1.0 - P.panic_sensitivity * withdrawal_ratio)
+            R = max(0.0, fundamental_R * panic_discount)
             total_future_value = cash + long_assets * R
             payout_S = apply_insurance((total_future_value / S) if S > 0 else 0.0)
 
@@ -224,7 +256,7 @@ def reveal_round():
             for sp in S_players:
                 payout_map[sp.pid] = payout_S
 
-            note = f"No default. LoLR +{lolr_used:.2f}. Perceived R={R:.2f}."
+            note = f"No default. LoLR +{lolr_used:.2f}. Fundamental R={fundamental_R:.2f}, effective R={R:.2f}."
             cash_end = cash
             long_remaining = long_assets
             payout_W_avg = payout_W
@@ -272,7 +304,9 @@ def reveal_round():
         "withdraw_queue": [
             {"name": wp.name, "t": (wp.choice_time or 0.0), "payout": float(payout_map.get(wp.pid, 0.0))}
             for wp in sorted(W_players, key=lambda x: x.choice_time if x.choice_time is not None else 10**18)
-        ] if P.queue_mode else []
+        ] if P.queue_mode else [],
+        "fundamental_bad": STATE["round_state"].get("fundamental_bad", False),
+        "fundamental_R": float(STATE["round_state"].get("fundamental_R", P.perceived_R())),
     })
 
     if STATE["round_no"] >= P.rounds_total:
@@ -325,6 +359,17 @@ STUDENT_PAGE = """
     &nbsp; <b>LoLR：</b>{{"ON" if params.lender_of_last_resort else "OFF"}}
     &nbsp; <b>Queue：</b>{{"ON" if params.queue_mode else "OFF"}}
   </div>
+  {% if phase in ("collect", "reveal", "finished") %}
+    <div style="margin-top:8px;"><b>你的私人信号：</b>
+      {% if private_signal == "BAD" %}
+        ⚠️ 你听到“坏消息”（但可能是噪音）
+      {% elif private_signal == "GOOD" %}
+        ✅ 你听到“正常消息”（但可能是噪音）
+      {% else %}
+        -
+      {% endif %}
+    </div>
+  {% endif %}
   {% if params.show_withdraw_count and phase=="collect" %}
     <div style="margin-top:8px;">
       <b>Public signal:</b> Current withdrawals = <b id="wcnt">...</b> / {{n_players}}
@@ -347,6 +392,9 @@ STUDENT_PAGE = """
     <tr><td>Perceived R</td><td>{{"%.2f"|format(params.perceived_R())}}</td></tr>
     <tr><td>Queue mode</td><td>{{"ON" if params.queue_mode else "OFF"}}</td></tr>
     <tr><td>Show withdraw count</td><td>{{"ON" if params.show_withdraw_count else "OFF"}}</td></tr>
+    <tr><td>Panic sensitivity</td><td>{{"%.2f"|format(params.panic_sensitivity)}}</td></tr>
+    <tr><td>Private signal precision</td><td>{{"%.2f"|format(params.private_signal_precision)}}</td></tr>
+    <tr><td>Fundamental bad-news prob</td><td>{{"%.2f"|format(params.bad_news_prob)}}</td></tr>
   </table>
 </div>
 
@@ -430,6 +478,7 @@ STUDENT_PAGE = """
     <li>你预期别人会取 → 取款更安全（尤其队列先到先得）。</li>
     <li>你预期别人不取 → 不取更好（避免火售损失）。</li>
     <li>公共信号（当前取款人数）会放大恐慌，导致自我实现的挤兑。</li>
+    <li>私人信号不完美：你听到的消息可能有噪音，关键在于你如何预判“别人会怎么想”。</li>
   </ul>
 </div>
 
@@ -512,6 +561,10 @@ TEACHER_PAGE = """
           <option value="0" {% if not params.show_withdraw_count %}selected{% endif %}>OFF</option>
         </select>
       </td><td>学生实时看到“已取款人数”</td></tr>
+
+      <tr><td>panic_sensitivity</td><td><input name="panic_sensitivity" value="{{params.panic_sensitivity}}" {% if params.locked %}disabled{% endif %}></td><td>恐慌外部性（W比例越高，长期资产有效回报越低）</td></tr>
+      <tr><td>private_signal_precision</td><td><input name="private_signal_precision" value="{{params.private_signal_precision}}" {% if params.locked %}disabled{% endif %}></td><td>私人信号准确率（0.5~0.99）</td></tr>
+      <tr><td>bad_news_prob</td><td><input name="bad_news_prob" value="{{params.bad_news_prob}}" {% if params.locked %}disabled{% endif %}></td><td>每轮基本面坏消息概率</td></tr>
     </table>
     <p><button class="btn primary" type="submit" {% if params.locked %}disabled{% endif %}>Save</button></p>
   </form>
@@ -528,9 +581,15 @@ TEACHER_PAGE = """
 </div>
 
 <div class="card">
+  <h3>Current Round Fundamentals (for debrief)</h3>
+  <p>Bad fundamental state: <b>{{"YES" if round_state.fundamental_bad else "NO"}}</b> |
+     Fundamental R: <b>{{"%.2f"|format(round_state.fundamental_R)}}</b></p>
+</div>
+
+<div class="card">
   <h3>History</h3>
   <table>
-    <tr><th>Round</th><th>W</th><th>S</th><th>Default risk</th><th>AvgPayW</th><th>PayS</th><th>CashStart</th><th>CashEnd</th><th>LongLeft</th><th>Note</th></tr>
+    <tr><th>Round</th><th>W</th><th>S</th><th>Default risk</th><th>AvgPayW</th><th>PayS</th><th>Fund.Bad</th><th>Fund.R</th><th>CashStart</th><th>CashEnd</th><th>LongLeft</th><th>Note</th></tr>
     {% for h in history %}
       <tr>
         <td>{{h.round_no}}</td>
@@ -539,6 +598,8 @@ TEACHER_PAGE = """
         <td>{{"YES" if h.bank_default else "NO"}}</td>
         <td>{{"%.2f"|format(h.payout_withdraw_avg)}}</td>
         <td>{{"%.2f"|format(h.payout_stay)}}</td>
+        <td>{{"YES" if h.fundamental_bad else "NO"}}</td>
+        <td>{{"%.2f"|format(h.fundamental_R)}}</td>
         <td>{{"%.2f"|format(h.cash_start)}}</td>
         <td>{{"%.2f"|format(h.cash_end)}}</td>
         <td>{{"%.2f"|format(h.long_assets_remaining)}}</td>
@@ -613,6 +674,7 @@ def student(pid):
         name=p.name,
         choice=p.last_choice,
         total_payoff=p.total_payoff,
+        private_signal=STATE["round_state"].get("private_signals", {}).get(pid),
         params=P,
         phase=STATE["phase"],
         round_no=STATE["round_no"],
@@ -674,6 +736,7 @@ def teacher():
         n_players=total_players(),
         players=sorted(STATE["players"].values(), key=lambda x: x.joined_at),
         history=STATE["history"],
+        round_state=STATE["round_state"],
     )
 
 
@@ -720,6 +783,9 @@ def teacher_params():
     # New toggles
     P.queue_mode = b("queue_mode")
     P.show_withdraw_count = b("show_withdraw_count")
+    P.panic_sensitivity = max(0.0, min(1.5, f("panic_sensitivity", P.panic_sensitivity)))
+    P.private_signal_precision = max(0.5, min(0.99, f("private_signal_precision", P.private_signal_precision)))
+    P.bad_news_prob = max(0.0, min(1.0, f("bad_news_prob", P.bad_news_prob)))
 
     return redirect(url_for("teacher", key=TEACHER_KEY))
 
@@ -744,6 +810,11 @@ def teacher_action():
         STATE["phase"] = "lobby"
         STATE["round_no"] = 0
         STATE["deadline"] = 0.0
+        STATE["round_state"] = {
+            "fundamental_bad": False,
+            "fundamental_R": 1.0,
+            "private_signals": {},
+        }
 
     return redirect(url_for("teacher", key=TEACHER_KEY))
 
