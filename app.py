@@ -150,7 +150,7 @@ def start_round():
         "private_signals": private_signals,
     }
     reset_choices()
-    return True, f"Round {STATE['round_no']} started."
+    return True, f"第 {STATE['round_no']} 轮已开始。"
 
 
 def maybe_auto_reveal():
@@ -234,7 +234,7 @@ def reveal_round():
         payout_W_avg = (sum(payout_map[p.pid] for p in W_players) / W) if W > 0 else 0.0
         payout_S_val = per_stayer
 
-        note = f"Queue mode. LoLR +{lolr_used:.2f}. Fundamental R={fundamental_R:.2f}, effective R={R:.2f}."
+        note = f"队列模式。最后贷款人注资 +{lolr_used:.2f}。基本面R={fundamental_R:.2f}，有效R={R:.2f}。"
         cash_end = cash
         long_remaining = long_assets
 
@@ -256,7 +256,7 @@ def reveal_round():
             for sp in S_players:
                 payout_map[sp.pid] = payout_S
 
-            note = f"No default. LoLR +{lolr_used:.2f}. Fundamental R={fundamental_R:.2f}, effective R={R:.2f}."
+            note = f"未触发违约。最后贷款人注资 +{lolr_used:.2f}。基本面R={fundamental_R:.2f}，有效R={R:.2f}。"
             cash_end = cash
             long_remaining = long_assets
             payout_W_avg = payout_W
@@ -268,7 +268,7 @@ def reveal_round():
                 payout_map[wp.pid] = payout_W
             for sp in S_players:
                 payout_map[sp.pid] = 0.0
-            note = f"DEFAULT (pro-rata). LoLR +{lolr_used:.2f}."
+            note = f"发生违约（按比例分配）。最后贷款人注资 +{lolr_used:.2f}。"
             cash_end = 0.0
             long_remaining = long_assets
             payout_W_avg = payout_W
@@ -285,7 +285,7 @@ def reveal_round():
         full_cnt = sum(1 for wp in W_players if abs(payout_map.get(wp.pid, 0.0) - apply_insurance(P.deposits_per_student)) < 1e-9)
         partial_cnt = sum(1 for wp in W_players if 1e-9 < payout_map.get(wp.pid, 0.0) < apply_insurance(P.deposits_per_student) - 1e-9)
         zero_cnt = W - full_cnt - partial_cnt
-        queue_stats = f" | Served: full={full_cnt}, partial={partial_cnt}, zero={zero_cnt}"
+        queue_stats = f" | 队列兑付：全额={full_cnt}，部分={partial_cnt}，零兑付={zero_cnt}"
 
     STATE["history"].append({
         "round_no": STATE["round_no"],
@@ -354,10 +354,10 @@ STUDENT_PAGE = """
 <div class="card">
   <div><b>你：</b>{{name}}</div>
   <div><b>轮次：</b>{{round_no}} / {{params.rounds_total}} &nbsp; <b>阶段：</b>{{phase}}</div>
-  <div><b>玩家数：</b>{{n_players}} &nbsp; <b>坏消息开关：</b>{{"ON" if params.bad_news else "OFF"}}
-    &nbsp; <b>Insurance：</b>{{"ON" if params.deposit_insurance else "OFF"}}
-    &nbsp; <b>LoLR：</b>{{"ON" if params.lender_of_last_resort else "OFF"}}
-    &nbsp; <b>Queue：</b>{{"ON" if params.queue_mode else "OFF"}}
+  <div><b>玩家数：</b>{{n_players}} &nbsp; <b>坏消息开关：</b>{{"开" if params.bad_news else "关"}}
+    &nbsp; <b>存款保险：</b>{{"开" if params.deposit_insurance else "关"}}
+    &nbsp; <b>最后贷款人（LoLR）：</b>{{"开" if params.lender_of_last_resort else "关"}}
+    &nbsp; <b>排队模式：</b>{{"开" if params.queue_mode else "关"}}
   </div>
   {% if phase in ("collect", "reveal", "finished") %}
     <div style="margin-top:8px;"><b>你的私人信号：</b>
@@ -443,13 +443,13 @@ STUDENT_PAGE = """
 {% else %}
   <div class="card">
     <p><b>上一轮结果</b>
-      {% if last and last.bank_default %}<span class="badge red">DEFAULT risk</span>{% endif %}
-      {% if last and not last.bank_default %}<span class="badge green">NO DEFAULT</span>{% endif %}
+      {% if last and last.bank_default %}<span class="badge red">有违约风险</span>{% endif %}
+      {% if last and not last.bank_default %}<span class="badge green">未违约</span>{% endif %}
     </p>
     {% if last %}
-      <p>Withdrawals：<b>{{last.withdrawals}}</b> / {{last.total_players}}</p>
-      <p>Avg payout(Withdraw)：<b>{{"%.2f"|format(last.payout_withdraw_avg)}}</b> |
-         Payout(Stay)：<b>{{"%.2f"|format(last.payout_stay)}}</b></p>
+      <p>取款人数：<b>{{last.withdrawals}}</b> / {{last.total_players}}</p>
+      <p>取款平均收益：<b>{{"%.2f"|format(last.payout_withdraw_avg)}}</b> |
+         留存收益：<b>{{"%.2f"|format(last.payout_stay)}}</b></p>
       <p><small>{{last.note}}</small></p>
 
       {% if last.withdraw_queue and last.withdraw_queue|length > 0 %}
@@ -519,8 +519,8 @@ TEACHER_PAGE = """
 
       <tr><td>bad_news</td><td>
         <select name="bad_news" {% if params.locked %}disabled{% endif %}>
-          <option value="0" {% if not params.bad_news %}selected{% endif %}>OFF</option>
-          <option value="1" {% if params.bad_news %}selected{% endif %}>ON</option>
+          <option value="0" {% if not params.bad_news %}selected{% endif %}>关</option>
+          <option value="1" {% if params.bad_news %}selected{% endif %}>开</option>
         </select>
       </td><td>坏消息开关</td></tr>
 
@@ -528,8 +528,8 @@ TEACHER_PAGE = """
 
       <tr><td>deposit_insurance</td><td>
         <select name="deposit_insurance" {% if params.locked %}disabled{% endif %}>
-          <option value="0" {% if not params.deposit_insurance %}selected{% endif %}>OFF</option>
-          <option value="1" {% if params.deposit_insurance %}selected{% endif %}>ON</option>
+          <option value="0" {% if not params.deposit_insurance %}selected{% endif %}>关</option>
+          <option value="1" {% if params.deposit_insurance %}selected{% endif %}>开</option>
         </select>
       </td><td>存款保险</td></tr>
 
@@ -537,8 +537,8 @@ TEACHER_PAGE = """
 
       <tr><td>lender_of_last_resort</td><td>
         <select name="lender_of_last_resort" {% if params.locked %}disabled{% endif %}>
-          <option value="0" {% if not params.lender_of_last_resort %}selected{% endif %}>OFF</option>
-          <option value="1" {% if params.lender_of_last_resort %}selected{% endif %}>ON</option>
+          <option value="0" {% if not params.lender_of_last_resort %}selected{% endif %}>关</option>
+          <option value="1" {% if params.lender_of_last_resort %}selected{% endif %}>开</option>
         </select>
       </td><td>最后贷款人</td></tr>
 
@@ -550,15 +550,15 @@ TEACHER_PAGE = """
 
       <tr><td>queue_mode</td><td>
         <select name="queue_mode" {% if params.locked %}disabled{% endif %}>
-          <option value="1" {% if params.queue_mode %}selected{% endif %}>ON</option>
-          <option value="0" {% if not params.queue_mode %}selected{% endif %}>OFF</option>
+          <option value="1" {% if params.queue_mode %}selected{% endif %}>开</option>
+          <option value="0" {% if not params.queue_mode %}selected{% endif %}>关</option>
         </select>
       </td><td>先到先得队列（越早Withdraw越安全）</td></tr>
 
       <tr><td>show_withdraw_count</td><td>
         <select name="show_withdraw_count" {% if params.locked %}disabled{% endif %}>
-          <option value="1" {% if params.show_withdraw_count %}selected{% endif %}>ON</option>
-          <option value="0" {% if not params.show_withdraw_count %}selected{% endif %}>OFF</option>
+          <option value="1" {% if params.show_withdraw_count %}selected{% endif %}>开</option>
+          <option value="0" {% if not params.show_withdraw_count %}selected{% endif %}>关</option>
         </select>
       </td><td>学生实时看到“已取款人数”</td></tr>
 
@@ -566,7 +566,7 @@ TEACHER_PAGE = """
       <tr><td>private_signal_precision</td><td><input name="private_signal_precision" value="{{params.private_signal_precision}}" {% if params.locked %}disabled{% endif %}></td><td>私人信号准确率（0.5~0.99）</td></tr>
       <tr><td>bad_news_prob</td><td><input name="bad_news_prob" value="{{params.bad_news_prob}}" {% if params.locked %}disabled{% endif %}></td><td>每轮基本面坏消息概率</td></tr>
     </table>
-    <p><button class="btn primary" type="submit" {% if params.locked %}disabled{% endif %}>Save</button></p>
+    <p><button class="btn primary" type="submit" {% if params.locked %}disabled{% endif %}>保存参数</button></p>
   </form>
 </div>
 
@@ -708,8 +708,8 @@ def choose():
 @app.route("/signal", methods=["GET"])
 def signal():
     """
-    Public signal endpoint for live withdrawals count.
-    Used by both student and teacher page JS polling.
+    公开信号接口：返回实时取款人数。
+    学生端和教师端都会通过 JS 轮询此接口。
     """
     maybe_auto_reveal()
     if STATE["phase"] != "collect":
